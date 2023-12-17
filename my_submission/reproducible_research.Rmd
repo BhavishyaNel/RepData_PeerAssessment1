@@ -1,0 +1,217 @@
+---
+title: "coursera_project1"
+author: "Visha"
+date: "16/12/2023"
+output: html_document
+---
+
+Setting up the chunks to print the code to the document as the default by setting knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown script for Course Project 1- Reproducible Research
+
+
+```{r libraries}
+# load the libraries required for the analysis
+library(ggplot2)
+library(dittoSeq)
+library(data.table)
+library(magrittr)
+library(readxl)
+library(dplyr)
+```
+
+# This chunk reads in the data and gives a brief summary of the raw and unprocessed data
+
+```{r load_data, echo=TRUE}
+# read in the csv file and store it in a R variable called activity
+activity = read.csv("~/Downloads/activity.csv")
+
+# take a look at the unprocessed data
+head(activity)
+
+# summary of the activity 
+summary(activity)
+
+# calculate the missing values in the data
+missing_values <- sapply(activity, function(x) sum(is.na(x)))
+
+# Display the results
+print("Total number of missing values per column:")
+print(missing_values)
+
+```
+
+# This chunk renders the Histogram of the total number of steps taken each day
+
+```{r histogram, echo=TRUE}
+# Convert the 'date' column to a Date type
+activity$date <- as.Date(activity$date)
+
+# Calculate the total number of steps taken each day
+total_steps_per_day <- aggregate(steps ~ date, data = activity, sum, na.rm = TRUE)
+
+# take a look at the total number of steps taken each day
+head(total_steps_per_day)
+
+# Create a histogram
+hist(total_steps_per_day$steps, 
+     main = "Histogram of Total Steps per Day",
+     xlab = "Total Steps",
+     ylab = "Frequency",
+     col = "skyblue",
+     border = "white")
+
+# Add labels and title for mean of total number of steps taken each day
+mean_label <- paste("Mean =", round(mean(total_steps_per_day$steps), 2))
+
+# Add labels and title for median of total number of steps taken each day
+median_label <- paste("Median =", round(median(total_steps_per_day$steps), 2))
+
+# Add a legend
+legend("topright", legend = c(mean_label, median_label), col = c("red", "blue"), bty = "n")
+
+
+```
+
+
+
+# This chunk calculates the Time series plot of the average number of steps taken and The 5-minute interval that, on average, contains the maximum number of steps
+
+
+```{r average_daily_activity_pattern}
+# Group data by 5-minute intervals and calculate average steps
+average_steps_by_interval <- aggregate(steps ~ interval, data = activity, mean, na.rm = TRUE)
+
+# Find the interval with the maximum average steps
+max_interval <- average_steps_by_interval$interval[which.max(average_steps_by_interval$steps)]
+print("The 5-minute interval that, on average, contains the maximum number of steps is:")
+print(max_interval)
+
+# Create a time series plot
+plot(average_steps_by_interval$interval, average_steps_by_interval$steps, type = "l",
+     main = "Average Number of Steps by 5-Minute Interval",
+     xlab = "5-Minute Interval",
+     ylab = "Average Steps",
+     col = "blue")
+
+# Highlight the interval with the maximum average steps
+points(max_interval, max(average_steps_by_interval$steps), col = "red", pch = 16, cex = 1.5)
+
+# Add labels and legend
+text(max_interval, max(average_steps_by_interval$steps), 
+     paste("Max Interval: ", max_interval), pos = 1, col = "red")
+
+legend("topright", legend = c("Average Steps", "Max Interval"), 
+       col = c("blue", "red"), lty = 1, pch = c(NA, 16), cex = 0.8)
+
+
+
+```
+
+
+# This chunk executes data imputation. It first replaces the days having all steps as NAs with zeros, and then replaces the days having some NAs with the mean values of that day.
+
+
+```{r imputation, echo=TRUE}
+
+# Calculate the mean number of steps per day
+mean_steps_per_day <- aggregate(steps ~ date, data = activity, mean, na.rm = TRUE)
+
+# Create a bar plot to show the mean number of steps per day
+barplot(mean_steps_per_day$steps, 
+        names.arg = mean_steps_per_day$date,
+        main = "Mean Number of Steps per Day",
+        xlab = "Date",
+        ylab = "Mean Steps",
+        col = "skyblue",
+        border = "white",
+        las = 2  # Rotates x-axis labels vertically for better readability
+)
+
+
+
+# Convert the 'date' column to a Date type
+activity$date <- as.Date(activity$date)
+
+# Identify days with all steps as NAs for all intervals
+days_with_all_na <- activity %>%
+  group_by(date) %>%
+  filter(all(is.na(steps))) %>%
+  pull(date)
+
+# Replace NAs with zeros for days with all steps as NAs
+activity <- activity %>%
+  mutate(steps = ifelse(date %in% days_with_all_na, 0, steps))
+
+# Calculate mean number of steps per day
+mean_steps_per_day <- activity %>%
+  group_by(date) %>%
+  summarize(mean_steps = mean(steps, na.rm = TRUE))
+
+# create a new dataframe activity1 containing the imputed data
+activity1 <- activity %>%
+  left_join(mean_steps_per_day, by = "date")
+
+# Replace NAs with mean values for days having only some NAs
+activity1 <- activity1 %>%
+  mutate(steps = ifelse(is.na(steps) & !date %in% days_with_all_na, mean_steps, steps)) %>%
+  select(-mean_steps)
+
+# Display the modified dataset
+head(activity1)
+```
+
+# This chunk calculates the mean and median of the data after imputation
+
+```{r data_after_imputation, echo=TRUE}
+
+
+# Calculate the total number of steps taken each day
+total_steps_per_day_after_imputation <- aggregate(steps ~ date, data = activity1, sum, na.rm = TRUE)
+
+head(total_steps_per_day_after_imputation)
+
+# Create a histogram
+hist(total_steps_per_day_after_imputation$steps, 
+     main = "Histogram of Total Steps per Day after imputation",
+     xlab = "Total Steps",
+     ylab = "Frequency",
+     col = "skyblue",
+     border = "white")
+
+# Add labels and title for mean of total number of steps taken each day
+mean_label <- paste("Mean =", round(mean(total_steps_per_day_after_imputation$steps), 2))
+
+# Add labels and title for median of total number of steps taken each day
+median_label <- paste("Median =", round(median(total_steps_per_day_after_imputation$steps), 2))
+
+# Add a legend
+legend("topright", legend = c(mean_label, median_label), col = c("red", "blue"), bty = "n")
+
+
+```
+
+
+# Finally, this chunk creates a Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r weekdays}
+# Create a new column 'day_type' to identify weekdays and weekends
+activity$day_type <- ifelse(weekdays(activity$date) %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+
+# Calculate the average number of steps per 5-minute interval for weekdays and weekends
+average_steps_by_interval <- aggregate(steps ~ interval + day_type, data = activity, mean, na.rm = TRUE)
+
+# Create a panel plot
+ggplot(average_steps_by_interval, aes(x = interval, y = steps, group = day_type, color = day_type)) +
+  geom_line() +
+  facet_wrap(~day_type, scales = "free_y", ncol = 1) +
+  labs(title = "Average Number of Steps per 5-Minute Interval",
+       x = "5-Minute Interval",
+       y = "Average Steps") +
+  theme_minimal()
+
+
+```
